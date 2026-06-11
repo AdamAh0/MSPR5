@@ -9,58 +9,68 @@
 
 ## Contexte
 
-Ce projet s'inscrit dans le cadre du **MSPR**, formation DIADS/DIA.
-L'API **OBRAIL Europe** est le backend central de l'observatoire des données ferroviaires européennes. Elle expose des endpoints REST asynchrones pour consulter les trajets, statistiques, opérateurs, lignes, gares et métriques environnementales.
+Ce projet s'inscrit dans le cadre du **MSPR** (Bloc E6.2), formation DIADS/DIA.  
+L'API **OBRAIL Europe** est le backend central de l'observatoire des données ferroviaires européennes. Elle expose des endpoints REST asynchrones pour consulter les trajets, statistiques, opérateurs, lignes, gares, métriques environnementales, et **prédire la substituabilité avion → train** via un modèle de Machine Learning (Membre 3).
 
-----
+---
 
-## Vue d'ensemble
+## Vue d'ensemble des endpoints
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        OBRAIL API                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  GET /health              → État de l'API + BDD             │
-│  GET /trajets             → Liste paginée avec filtres      │
-│  GET /trajets/{id}        → Détail d'un trajet              │
-│  GET /operateurs          → Opérateurs ferroviaires         │
-│  GET /lignes              │ Lignes commerciales             │
-│  GET /gares               → Gares + géolocalisation         │
-│  GET /pays                → Référentiel pays                │
-│                                                             │
-│  GET /stats/kpi           → Chiffres clés globaux           │
-│  GET /stats/volumes       → Répartition par groupe          │
-│  GET /stats/comparatif    → Jour vs Nuit                    │
-│  GET /stats/co2           → Émissions CO₂                   │
-│  GET /stats/top-liaisons  → Top liaisons fréquentées        │
-│                                                             │
-│  GET /imports             → Historique des imports          │
-│  GET /imports/stats       → Métriques d'import              │
-│                                                             │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │ PostgreSQL  │
-                    │  + PostGIS  │
-                    └─────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        OBRAIL API v3.0                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Système                                                        │
+│  GET  /health              → État de l'API + BDD                │
+│                                                                 │
+│  Trajets                                                        │
+│  GET  /trajets             → Liste paginée avec filtres         │
+│  GET  /trajets/{id}        → Détail d'un trajet                 │
+│                                                                 │
+│  Statistiques                                                   │
+│  GET  /stats/kpi           → Chiffres clés globaux              │
+│  GET  /stats/volumes       → Répartition par groupe             │
+│  GET  /stats/comparatif-jour-nuit → Jour vs Nuit               │
+│  GET  /stats/co2           → Émissions CO₂                      │
+│  GET  /stats/top-liaisons  → Top liaisons fréquentées           │
+│                                                                 │
+│  Référentiels                                                   │
+│  GET  /operateurs          → Opérateurs ferroviaires            │
+│  GET  /lignes              → Lignes commerciales                │
+│  GET  /gares               → Gares + géolocalisation            │
+│  GET  /pays                → Référentiel pays                   │
+│                                                                 │
+│  Imports                                                        │
+│  GET  /imports             → Historique des imports             │
+│  GET  /imports/stats       → Métriques d'import                 │
+│                                                                 │
+│  IA / Prédiction  (Membre 3)                                    │
+│  POST /predict             → Prédiction de substitution modale  │
+│                                                                 │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                   ┌────────────┴────────────┐
+                   │      PostgreSQL 15       │
+                   │       + PostGIS          │
+                   └─────────────────────────┘
 ```
 
-----
+---
 
-## Stack Technique
+## Stack technique
 
 | Couche | Technologie |
-|---|---|
+|--------|-------------|
 | **Framework** | FastAPI (asynchrone) |
 | **Serveur ASGI** | Uvicorn |
-| **Base de données** | PostgreSQL 15 + PostGIS 3.4 |
-| **ORM / Driver** | `databases` (asyncpg) + SQLAlchemy (core) |
+| **Base de données** | PostgreSQL 15 + PostGIS |
+| **Driver async** | `databases` (asyncpg) |
 | **Validation** | Pydantic v2 |
-| **Tests** | pytest, httpx, pytest-mock, pytest-cov |
+| **ML / Inférence** | scikit-learn, joblib, numpy, pandas |
+| **Tests** | pytest, httpx, pytest-asyncio, pytest-mock |
 | **Configuration** | python-dotenv |
 | **Conteneurisation** | Docker + Docker Compose |
-| **CI/CD** | GitHub Actions (lint, tests, build Docker) |
+| **CI/CD** | GitHub Actions |
 
 ---
 
@@ -68,20 +78,46 @@ L'API **OBRAIL Europe** est le backend central de l'observatoire des données fe
 
 ```
 OBRAIL-API/
-├── main.py              # Application FastAPI + tous les endpoints
-├── requirements.txt     # Dépendances Python
-├── Dockerfile           # Image Docker multi-stage
-├── docker-compose.yml   # Orchestration API + BDD
-├── .env.example         # Template de configuration
-├── pytest.ini           # Configuration pytest
-├── conftest.py          # Fixtures de test
-├── tests/               # Tests unitaires et d'intégration
+├── main.py                      # Point d'entrée — crée l'app, inclut les routers
+│
+├── database/
+│   ├── __init__.py
+│   └── connection.py            # Connexion PostgreSQL async + lifespan
+│
+├── utils/
+│   ├── __init__.py
+│   └── converters.py            # Fonctions utilitaires : to_float, to_iso, normalize_*
+│
+├── routers/
+│   ├── trajets.py               # GET /trajets, GET /trajets/{id}
+│   ├── stats.py                 # GET /stats/*
+│   ├── referentiels.py          # GET /operateurs, /lignes, /gares, /pays
+│   ├── imports.py               # GET /imports, /imports/stats
+│   ├── predict.py               # POST /predict  ← Membre 3
+│   └── compat.py                # Endpoints rétrocompatibles
+│
+├── schemas/
+│   ├── __init__.py
+│   └── predict.py               # Modèles Pydantic I/O pour /predict
+│
+├── services/
+│   ├── __init__.py
+│   └── predict_service.py       # Chargement du modèle ML + inférence
+│
+├── docs/
+│   └── monitoring.md            # Guide de surveillance production (Membre 3)
+│
+├── tests/                       # Tests d'intégration (nécessitent une BDD)
+│   ├── conftest.py
 │   └── test_*.py
-├── .github/workflows/   # Pipelines CI/CD
-│   ├── ci-api.yml       # Tests Pytest avec BDD de test
-│   └── docker-api.yml   # Build & push image Docker
-├── .dockerignore        # Exclusions Docker
-└── README.md            # Ce fichier
+│
+├── test_predict.py              # Tests unitaires POST /predict (mocks, sans BDD)
+├── conftest.py                  # Fixtures pytest racine
+├── requirements.txt
+├── pytest.ini
+├── Dockerfile
+├── docker-compose.yml
+└── .env.example
 ```
 
 ---
@@ -90,192 +126,231 @@ OBRAIL-API/
 
 ### Prérequis
 
-- Python 3.10+ ou Docker
-- PostgreSQL 15+ avec extension PostGIS (si exécution locale)
+- Python 3.10+ (ou Docker)
+- PostgreSQL 15+ avec PostGIS (pour les endpoints BDD)
 
-### Option 1 : Docker (Recommandé)
+### Option 1 — Local (sans Docker)
+
+**1. Configurer l'environnement :**
 
 ```powershell
-cd OBRAIL-API
+copy .env.example .env
+# Modifier DATABASE_URL dans .env
+```
+
+```env
+DATABASE_URL=postgresql://obrail_user:obrail_pass@localhost:5433/obrail
+```
+
+**2. Installer les dépendances :**
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+**3. Lancer l'API :**
+
+```powershell
+python -m uvicorn main:app --reload
+```
+
+L'API démarre sur **http://localhost:8000**.  
+Sans PostgreSQL, les routes BDD retournent une erreur mais `/predict` reste fonctionnel si un modèle est présent.
+
+### Option 2 — Docker
+
+```powershell
 docker-compose up -d --build
 ```
 
-L'API est accessible sur **http://localhost:8000**.
-
-### Option 2 : Environnement local
-
-1. **Créer la base de données** (voir OBRAIL-BDD pour le script d'initialisation)
-
-2. **Configurer les variables d'environnement** :
-   ```powershell
-   copy .env.example .env
-   ```
-   Modifier `DATABASE_URL` dans le fichier `.env` :
-   ```env
-   DATABASE_URL=postgresql+asyncpg://obrail_user:obrail_pass@localhost:5434/obrail
-   ```
-
-3. **Installer les dépendances** :
-   ```powershell
-   python -m venv venv
-   .\venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-4. **Lancer le serveur** :
-   ```powershell
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
 ---
 
-## Documentation de l'API
+## Documentation interactive
 
-FastAPI génère automatiquement la documentation interactive :
+FastAPI génère automatiquement la documentation :
 
 | Interface | URL |
-|---|---|
+|-----------|-----|
 | **Swagger UI** | http://localhost:8000/docs |
 | **ReDoc** | http://localhost:8000/redoc |
 
 ---
 
+## Endpoint IA — POST /predict
+
+> **Ajout Membre 3** — Prédit la classe de substitution modale pour une ou plusieurs liaisons ferroviaires.
+
+### Requête
+
+```http
+POST /predict
+Content-Type: application/json
+```
+
+```json
+[
+  {
+    "duree_minutes": 120.0,
+    "heure_decimale": 8.5,
+    "is_nuit": 0,
+    "is_transfrontalier": 0,
+    "code_pays_dep": "FR",
+    "code_pays_arr": "FR"
+  }
+]
+```
+
+| Champ | Type | Contraintes | Description |
+|-------|------|-------------|-------------|
+| `duree_minutes` | float | ≥ 0 | Durée du trajet en minutes |
+| `heure_decimale` | float | 0 ≤ x < 24 | Heure de départ décimale (8.5 = 08h30) |
+| `is_nuit` | int | 0 ou 1 | 1 si trajet de nuit |
+| `is_transfrontalier` | int | 0 ou 1 | 1 si trajet transfrontalier |
+| `code_pays_dep` | string | 2 caractères | Code ISO pays de départ |
+| `code_pays_arr` | string | 2 caractères | Code ISO pays d'arrivée |
+
+### Réponse
+
+```json
+{
+  "results": [
+    {
+      "prediction": "substitution_possible",
+      "proba_non_pertinent": 0.05,
+      "proba_substitution_difficile": 0.15,
+      "proba_substitution_possible": 0.80,
+      "probabilities": {
+        "non_pertinent": 0.05,
+        "substitution_difficile": 0.15,
+        "substitution_possible": 0.80
+      }
+    }
+  ],
+  "model_name": "mlp",
+  "count": 1,
+  "model_source": "artifacts/member3/best_model.joblib"
+}
+```
+
+### Classes prédites
+
+| Classe | Signification |
+|--------|---------------|
+| `non_pertinent` | Le train ne peut pas remplacer l'avion |
+| `substitution_difficile` | Substitution possible mais contraignante |
+| `substitution_possible` | Le train est une alternative crédible |
+
+### Codes d'erreur
+
+| Code | Cause |
+|------|-------|
+| 400 | Payload vide ou > 1 000 observations |
+| 422 | Champ manquant ou invalide |
+| 503 | Aucun modèle disponible (lancer l'entraînement d'abord) |
+| 500 | Erreur interne |
+
+### Modèle utilisé
+
+L'API cherche le modèle dans cet ordre :
+1. Variable d'environnement `MODEL_PATH`
+2. `artifacts/member3/best_model.joblib` (MLP — Membre 3)
+3. `../ia-mspr-/artifacts/member3/best_model.joblib`
+4. `artifacts/member2/best_model.joblib` (classiques — Membre 2, fallback)
+
+Pour pointer vers un modèle spécifique :
+
+```powershell
+$env:MODEL_PATH = "C:\...\artifacts\member3\best_model.joblib"
+python -m uvicorn main:app --reload
+```
+
+---
+
 ## Endpoints détaillés
 
-### Système & Santé
+### GET /trajets
 
-#### `GET /health`
-Vérifie l'état de l'API et la connexion à la base de données.
-
-```json
-{
-  "status": "ok",
-  "timestamp": "2026-05-06T12:00:00Z",
-  "components": {
-    "db": "ok"
-  }
-}
-```
-
-### Trajets & Mobilité
-
-#### `GET /trajets`
 Liste paginée des trajets avec filtres.
 
-**Paramètres de requête** :
 | Paramètre | Type | Description |
-|---|---|---|
-| `page` | int | Numéro de page (défaut: 1) |
-| `limit` | int | Taille de page (défaut: 15) |
-| `operateur` | string | Filtrer par opérateur |
-| `ligne` | string | Filtrer par ligne |
-| `pays_depart` | string | Pays de départ |
-| `pays_arrivee` | string | Pays d'arrivée |
+|-----------|------|-------------|
+| `page` | int | Page (défaut: 1) |
+| `limit` | int | Taille de page, max 100 (défaut: 15) |
+| `id_operateur` | string | Filtrer par opérateur |
+| `id_ligne` | string | Filtrer par ligne |
+| `code_pays_depart` | string | Code ISO pays départ |
+| `code_pays_arrivee` | string | Code ISO pays arrivée |
+| `type` | string | `jour` ou `nuit` |
+| `co2_max` | float | Émission CO₂ max (kg) |
+| `duree_min` / `duree_max` | int | Plage de durée (minutes) |
+| `search` | string | Recherche libre |
 
-#### `GET /trajets/{id_trajet}`
-Détails complets d'un trajet avec gare de départ/arrivée, ligne et opérateur.
-
-### Statistiques & KPIs
-
-#### `GET /stats/kpi`
-Chiffres clés globaux.
+### GET /stats/kpi
 
 ```json
 {
-  "total_trajets": 1250,
-  "trajets_jour": 820,
-  "trajets_nuit": 430,
-  "total_operateurs": 5,
-  "total_lignes": 28,
+  "total_trajets": 52314,
+  "trajets_jour": 48020,
+  "trajets_nuit": 4294,
+  "total_operateurs": 12,
+  "total_lignes": 87,
   "total_gares": 142,
-  "total_pays": 12,
-  "co2_total_kg": 3145.67,
-  "co2_moyen_kg": 2.52,
-  "duree_moyenne_minutes": 187
+  "total_pays": 6,
+  "co2_total_kg": 284156.3,
+  "co2_moyen_kg": 5.43,
+  "duree_moyenne_minutes": 116
 }
 ```
 
-#### `GET /stats/volumes?groupby=operateur`
-Répartition des volumes par catégorie.
+### GET /stats/volumes?groupby=operateur
 
-**Paramètre `groupby`** : `operateur`, `ligne`, `pays_depart`, `creneau_horaire`
+**Valeurs de `groupby`** : `operateur`, `ligne`, `pays_depart`, `pays_arrivee`, `jour_nuit`
 
-#### `GET /stats/comparatif-jour-nuit`
-Comparaison détaillée jour vs nuit (nombre de trajets, durée moyenne, émissions CO₂).
+### GET /gares
 
-#### `GET /stats/co2`
-Statistiques environnementales par opérateur et par ligne.
+Supporte le filtrage par bounding box géographique :
 
-### Référentiels
+```
+GET /gares?bbox=43.0,2.0,49.0,8.0
+```
 
-| Endpoint | Description |
-|---|---|
-| `GET /operateurs` | Liste des opérateurs ferroviaires |
-| `GET /lignes` | Liste des lignes commerciales |
-| `GET /gares` | Liste des gares (filtre par pays et bounding box) |
-| `GET /pays` | Référentiel des pays couverts |
-
-### Importation
-
-| Endpoint | Description |
-|---|---|
-| `GET /imports` | Historique des imports avec pagination |
-| `GET /imports/stats` | Métriques de réussite/échec des imports |
+Format : `lat_min,lng_min,lat_max,lng_max`
 
 ---
 
 ## Tests
 
-### Exécuter les tests
+### Tests unitaires (sans BDD)
 
 ```powershell
-pytest tests/ --asyncio-mode=auto --cov=. --cov-report=html
+python -m pytest test_predict.py -v
 ```
 
-### Pipeline CI des tests
+9 tests couvrant la route `POST /predict` (mocks, validation, cas d'erreur).
 
-Le workflow `ci-api.yml` exécute automatiquement les tests à chaque push/PR :
+### Tests d'intégration (avec BDD)
 
-1. Clone le repo API + le repo BDD (pour le schéma SQL)
-2. Lance un container PostgreSQL/PostGIS
-3. Initialise la base avec le schéma
-4. Exécute pytest avec couverture de code
+```powershell
+python -m pytest tests/ -v --asyncio-mode=auto
+```
+
+### Couverture de code
+
+```powershell
+python -m pytest --cov=. --cov-report=html
+# Rapport dans htmlcov/index.html
+```
 
 ---
 
-## Docker
+## Variables d'environnement
 
-### Image Docker
-
-Le Dockerfile utilise Python 3.11-slim pour une image légère :
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### CI/CD — Build & Push automatisé
-
-Le workflow `docker-api.yml` construit et pousse l'image sur GHCR :
-
-| Événement | Tag Docker |
-|---|---|
-| Push `main` | `ghcr.io/mspr-3/obrail-api:main` |
-| Push `develop` | `ghcr.io/mspr-3/obrail-api:develop` |
-| Tag `v1.2.0` | `ghcr.io/mspr-3/obrail-api:1.2.0` |
-| PR #42 | `ghcr.io/mspr-3/obrail-api:pr-42` |
-
-### Récupérer l'image
-
-```powershell
-docker pull ghcr.io/mspr-3/obrail-api:main
-docker run -p 8000:8000 ghcr.io/mspr-3/obrail-api:main
-```
+| Variable | Description | Exemple |
+|----------|-------------|---------|
+| `DATABASE_URL` | Connexion PostgreSQL | `postgresql://user:pass@host:5433/db` |
+| `MODEL_PATH` | Chemin vers le modèle `.joblib` (optionnel) | `artifacts/member3/best_model.joblib` |
 
 ---
 
@@ -285,40 +360,39 @@ docker run -p 8000:8000 ghcr.io/mspr-3/obrail-api:main
 ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │  OBRAIL-Frontend │────▶│   OBRAIL-API     │────▶│   OBRAIL-BDD    │
 │  (React/Vite)    │     │  (FastAPI)       │     │  (PostgreSQL)    │
-│   Port 5173      │     │   Port 8000      │     │   Port 5434      │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
+│   Port 5173      │     │   Port 8000      │     │   Port 5433      │
+└──────────────────┘     └────────┬─────────┘     └──────────────────┘
+                                  │
+                         ┌────────┴─────────┐
+                         │   ia-mspr-       │
+                         │  (Modèle ML)     │
+                         │  .joblib         │
+                         └──────────────────┘
 ```
 
 ---
 
-## Configuration avancée
+## Surveillance (Membre 3)
 
-### Variables d'environnement
+Documentation complète dans [`docs/monitoring.md`](docs/monitoring.md) :
 
-| Variable | Description | Exemple |
-|---|---|---|
-| `DATABASE_URL` | Chaîne de connexion asyncpg | `postgresql+asyncpg://user:pass@host:5432/db` |
-
-### CORS & Sécurité
-
-L'API peut être configurée avec des middlewares CORS pour restreindre les origines autorisées.
+- Métriques de latence (Prometheus Histogram)
+- Taux d'erreur par classe prédite
+- Détection de data drift (test KS / PSI)
+- Alertes et seuils recommandés
 
 ---
 
-## Qualité de code
+## CI/CD
 
-### Husky + Hooks
+Le workflow `.github/workflows/ci-api.yml` exécute automatiquement à chaque push :
 
-Le projet utilise Husky pour exécuter des vérifications avant chaque commit.
-
-### Conventions
-
-- Code asynchrone avec `async/await`
-- Validation Pydantic pour tous les schémas de réponse
-- Tests couvrant les endpoints critiques
+1. Démarrage d'un container PostgreSQL/PostGIS
+2. Initialisation du schéma BDD
+3. Exécution de pytest avec couverture de code
 
 ---
 
 ## Licence
 
-Projet pédagogique. Usage interne — DIADS/DIA.
+Projet pédagogique — Usage interne DIADS/DIA.
