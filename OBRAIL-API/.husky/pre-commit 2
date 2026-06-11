@@ -1,0 +1,9 @@
+#!/bin/env bash
+
+echo "--- Vérification de la qualité avant commit ---"
+
+black .
+
+isort .
+
+flake8 . --count --select=E9,F63,F7,F82,F841,F541,E402 --show-source --statistics

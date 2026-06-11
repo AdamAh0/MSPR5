@@ -1,0 +1,1 @@
+DATABASE_URL=postgresql://obrail_user:obrail_pass@localhost:5433/obrail

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: obrail_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # L'URL de la base de données doit pointer vers le conteneur DB de OBRAIL-BDD (si dans le même réseau)
+      # ou utiliser host.docker.internal si la BDD est lancée séparément sur l'hôte.
+      # Par défaut, on suppose que la DB est sur l'hôte.
+      - DATABASE_URL=postgresql://obrail_user:obrail_pass@host.docker.internal:5434/obrail
+    volumes:
+      - .:/app

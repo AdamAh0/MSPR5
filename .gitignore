@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environnement virtuel
+.venv/
+venv/
+env/
+
+# Secrets — ne jamais commiter
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data (fichiers volumineux)
+ia-mspr-/data/*.csv
+
+# Artefacts ML (modèles sérialisés volumineux)
+*.joblib
+*.pkl
+*.h5
+
+# Logs & coverage
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dossiers git sauvegardés (temporaires)
+**/.git_bak/
+
+# Config locale Claude Code
+.claude/
