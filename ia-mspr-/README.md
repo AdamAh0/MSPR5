@@ -36,22 +36,14 @@ ia-mspr-/
 │   └── 02_rapport_projet.md        # Vue d'ensemble de l'architecture du projet
 │
 ├── artifacts/
-│   ├── member2/                    # Artefacts M2 (modèles classiques)
-│   │   ├── best_model.joblib       # Meilleur modèle sérialisé
-│   │   ├── candidate_results.csv   # Tableau comparatif des modèles
-│   │   ├── training_summary.json   # Métriques finales
-│   │   ├── confusion_matrix_test.png
-│   │   └── feature_importance.png
-│   │
-│   └── member3/                    # Artefacts M3 (MLP)
-│       ├── best_model.joblib       # Modèle MLP sérialisé
+│   └── member2/                    # Artefacts M2 (modèles classiques)
+│       ├── best_model.joblib       # Meilleur modèle sérialisé
+│       ├── candidate_results.csv   # Tableau comparatif des modèles
 │       ├── training_summary.json   # Métriques finales
 │       ├── confusion_matrix_test.png
-│       ├── loss_curve.png          # Courbe de perte par époque
-│       └── model_comparison.png    # Comparaison M2 vs M3
+│       └── feature_importance.png
 │
 ├── member2_ml.py                   # M2 — Pipeline ML classiques (LR, RF, XGBoost, LightGBM)
-├── member3_mlp.py                  # M3 — Pipeline MLP (réseau de neurones)
 ├── predict.py                      # Script d'inférence en ligne de commande
 ├── sample.json                     # Payload de test pour predict.py
 ├── requirements.txt
@@ -114,47 +106,11 @@ python member2_ml.py --data data/obrail_features.csv --artifact-dir artifacts/me
 Modèles entraînés : Régression Logistique (baseline), Random Forest, XGBoost, LightGBM.  
 Résultats dans `artifacts/member2/candidate_results.csv`.
 
-### M3 — Entraînement du MLP
-
-```powershell
-# Recherche rapide (3 architectures, pour test)
-python member3_mlp.py --n-iter 3 --cv-splits 3
-
-# Recherche complète (20 architectures, recommandé)
-python member3_mlp.py --n-iter 20 --cv-splits 5
-```
-
-**Résultats obtenus avec `--n-iter 3`** :
-
-| Métrique | Score |
-|----------|-------|
-| Accuracy (test) | 93.6 % |
-| F1-macro (test) | 77.9 % |
-| AUC-ROC (test) | 96.8 % |
-
-Meilleure architecture : **(256, 128, 64)** — activation relu, α=0.0005, lr=0.001
-
 ### Prédiction en ligne de commande
 
 ```powershell
 python predict.py --model artifacts/member3/best_model.joblib --payload sample.json
 ```
-
----
-
-## Architectures MLP testées (M3)
-
-La recherche d'architecture couvre les configurations suivantes via `RandomizedSearchCV` :
-
-| Hyperparamètre | Valeurs |
-|----------------|---------|
-| `hidden_layer_sizes` | (64,), (128,), (256,), (64,32), (128,64), (256,128), (128,64,32), (256,128,64), (512,256,128) |
-| `activation` | relu, tanh |
-| `alpha` (régularisation L2) | 1e-4, 5e-4, 1e-3, 5e-3, 1e-2 |
-| `learning_rate_init` | 1e-3, 5e-3, 1e-2 |
-| `batch_size` | 64, 128, 256 |
-
-Validation croisée stratifiée 5-fold, optimisation sur F1-macro.
 
 ---
 
