@@ -43,5 +43,8 @@ desktop.ini
 # Dossiers git sauvegardés (temporaires)
 **/.git_bak/
 
+# Dossier API (repo séparé)
+OBRAIL-API/
+
 # Config locale Claude Code
 .claude/

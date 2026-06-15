@@ -1,9 +1,0 @@
-__pycache__
-*.pyc
-.git
-.github
-.env*
-tests/
-*.md
-.husky
-.coverage
